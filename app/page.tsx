@@ -92,10 +92,27 @@ function compactNumber(value: number) {
   return Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
+const OWNER_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/;
+const REPO_NAME_PATTERN = /^[A-Za-z0-9._-]{1,100}$/;
+
 function parseRepoUrl(value: string) {
   const clean = value.trim().replace(/\.git$/, "").replace(/\/$/, "");
-  const match = clean.match(/github\.com\/([^/]+)\/([^/]+)/i);
-  return match ? { owner: match[1], name: match[2] } : null;
+  const match = clean.match(/github\.com\/([^/?#]+)\/([^/?#]+)/i);
+  if (!match) return null;
+
+  const [, owner, name] = match;
+  if (!OWNER_PATTERN.test(owner) || !REPO_NAME_PATTERN.test(name)) return null;
+  if (name === "." || name === "..") return null;
+
+  return { owner, name };
+}
+
+function githubApiUrl(path: string, query?: Record<string, string>) {
+  const url = new URL(`https://api.github.com${path}`);
+  for (const [key, value] of Object.entries(query ?? {})) {
+    url.searchParams.set(key, value);
+  }
+  return url.toString();
 }
 
 function scoreIssue(title: string, labels: string[], comments: number) {
@@ -140,14 +157,15 @@ export default function Home() {
     try {
       const headers = { Accept: "application/vnd.github+json" };
       const [repoResponse, issuesResponse, contentsResponse] = await Promise.all([
-        fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.name}`, { headers }),
-        fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.name}/issues?state=open&per_page=20`, { headers }),
-        fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.name}/contents`, { headers }),
+        fetch(githubApiUrl(`/repos/${parsed.owner}/${parsed.name}`), { headers }),
+        fetch(githubApiUrl(`/repos/${parsed.owner}/${parsed.name}/issues`, { state: "open", per_page: "20" }), { headers }),
+        fetch(githubApiUrl(`/repos/${parsed.owner}/${parsed.name}/contents`), { headers }),
       ]);
 
       if (!repoResponse.ok) throw new Error("Repository unavailable");
       const details = await repoResponse.json();
-      const rawIssues = issuesResponse.ok ? await issuesResponse.json() : [];
+      const issuesPayload = issuesResponse.ok ? await issuesResponse.json() : [];
+      const rawIssues = Array.isArray(issuesPayload) ? issuesPayload : [];
       const rawContents = contentsResponse.ok ? await contentsResponse.json() : [];
       const rootFiles = Array.isArray(rawContents)
         ? rawContents
@@ -158,8 +176,8 @@ export default function Home() {
 
       const issues: Issue[] = rawIssues
         .filter((item: { pull_request?: unknown }) => !item.pull_request)
-        .map((item: { number: number; title: string; labels: { name?: string }[]; comments: number }) => {
-          const labels = item.labels.map((label) => label.name ?? "").filter(Boolean);
+        .map((item: { number: number; title: string; labels?: { name?: string }[]; comments: number }): Issue => {
+          const labels = (Array.isArray(item.labels) ? item.labels : []).map((label) => label.name ?? "").filter(Boolean);
           const score = scoreIssue(item.title, labels, item.comments);
           return {
             number: item.number,
