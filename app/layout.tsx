@@ -1,27 +1,35 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_OG_IMAGE,
+  SITE_OG_IMAGE_ALT,
+  SITE_TAGLINE,
+  SITE_URL,
+} from "./site";
 
 export const metadata: Metadata = {
-  title: "Open-Source Contribution Coach",
-  description: "Understand any repository, find the right issue, and ship a merge-ready pull request.",
+  title: SITE_NAME,
+  description: SITE_DESCRIPTION,
   openGraph: {
-    title: "Open-Source Contribution Coach",
-    description: "From unfamiliar repo to merge-ready PR.",
-    url: "https://open-source-contribution-coach.lowkyuncoolcoder.chatgpt.site",
-    siteName: "Open-Source Contribution Coach",
+    title: SITE_NAME,
+    description: SITE_TAGLINE,
+    url: SITE_URL,
+    siteName: SITE_NAME,
     images: [{
-      url: "https://open-source-contribution-coach.lowkyuncoolcoder.chatgpt.site/og.png",
+      url: SITE_OG_IMAGE,
       width: 1672,
       height: 941,
-      alt: "Open-Source Contribution Coach — from unfamiliar repo to merge-ready PR",
+      alt: SITE_OG_IMAGE_ALT,
     }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Open-Source Contribution Coach",
-    description: "From unfamiliar repo to merge-ready PR.",
-    images: ["https://open-source-contribution-coach.lowkyuncoolcoder.chatgpt.site/og.png"],
+    title: SITE_NAME,
+    description: SITE_TAGLINE,
+    images: [SITE_OG_IMAGE],
   },
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
 };
