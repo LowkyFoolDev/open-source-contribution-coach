@@ -92,6 +92,13 @@ function compactNumber(value: number) {
   return Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
+class GitHubRequestError extends Error {
+  constructor(readonly status: number, resource: string) {
+    super(`GitHub ${resource} request failed with status ${status}`);
+    this.name = "GitHubRequestError";
+  }
+}
+
 function parseRepoUrl(value: string) {
   const clean = value.trim().replace(/\.git$/, "").replace(/\/$/, "");
   const match = clean.match(/github\.com\/([^/]+)\/([^/]+)/i);
@@ -145,10 +152,18 @@ export default function Home() {
         fetch(`https://api.github.com/repos/${parsed.owner}/${parsed.name}/contents`, { headers }),
       ]);
 
-      if (!repoResponse.ok) throw new Error("Repository unavailable");
+      if (repoResponse.status === 404) {
+        setError("Repository not found. Check that the URL points to an existing public GitHub repository.");
+        return;
+      }
+      if (!repoResponse.ok) throw new GitHubRequestError(repoResponse.status, "repository");
       const details = await repoResponse.json();
       const rawIssues = issuesResponse.ok ? await issuesResponse.json() : [];
       const rawContents = contentsResponse.ok ? await contentsResponse.json() : [];
+      const unavailable = [
+        ...(issuesResponse.ok ? [] : ["open issues"]),
+        ...(contentsResponse.ok ? [] : ["the file listing"]),
+      ];
       const rootFiles = Array.isArray(rawContents)
         ? rawContents
             .sort((a: { type: string }, b: { type: string }) => a.type === b.type ? 0 : a.type === "dir" ? -1 : 1)
@@ -191,10 +206,19 @@ export default function Home() {
       });
       setSelectedIssue(issues[0] ?? SAMPLE_REPO.issues[0]);
       setTab("overview");
-    } catch {
+      if (unavailable.length) {
+        setError(`Live GitHub data for ${unavailable.join(" and ")} was unavailable, so sample data is shown for ${unavailable.length > 1 ? "those sections" : "that section"}.`);
+      }
+    } catch (err) {
+      console.error("Repository analysis failed:", err);
+      const rateLimited = err instanceof GitHubRequestError && (err.status === 403 || err.status === 429);
       setRepo({ ...SAMPLE_REPO, owner: parsed.owner, name: parsed.name });
       setSelectedIssue(SAMPLE_REPO.issues[0]);
-      setError("Live metadata was unavailable, so a complete demo analysis is shown.");
+      setError(
+        rateLimited
+          ? "GitHub API rate limit reached, so a complete demo analysis is shown. Try again in a few minutes."
+          : "Live metadata was unavailable, so a complete demo analysis is shown.",
+      );
     } finally {
       setLoading(false);
     }
